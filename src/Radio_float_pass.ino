@@ -20,6 +20,13 @@ const uint8_t enable_pin = 6;
 const uint8_t step_pin = 5;
 const uint8_t direction_pin = 4;
 
+const uint8_t up_button_pin = 2;
+const uint8_t down_button_pin = 3;
+bool UP_FLAG = false;
+bool DOWN_FLAG = false;
+const uint8_t num_steps_on_button = 50;
+const uint8_t step_frequency_hz = 100; //Hz
+
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(7, 8);  // using pin 7 for the CE pin, and pin 8 for the CSN pin
 
@@ -49,6 +56,11 @@ void setup() {
   pinMode(enable_pin, OUTPUT);
   pinMode(step_pin, OUTPUT);
   pinMode(direction_pin, OUTPUT);
+
+  pinMode(up_button_pin, OUTPUT);
+  pinMode(down_button_pin, OUTPUT);
+  attachInterrupt( digitalPinToInterrupt(up_button_pin), ISR_UP, RISING);
+  attachInterrupt( digitalPinToInterrupt(down_button_pin), ISR_DOWN, RISING);
 
   // initialize the transceiver on the SPI bus
   if (!radio.begin()) {
@@ -98,6 +110,47 @@ void setup() {
 
 }  // setup
 
+void ISR_UP(){
+  UP_FLAG = true;
+  return;
+}
+
+void ISR_DOWN(){
+  DOWN_FLAG = true;
+  return;
+}
+
+void handle_button(){
+
+  Serial.println("handling button");
+
+  float up = 10.0;
+  float down = -10.0;
+  
+  if(UP_FLAG == true){
+    bool report = radio.write(&up, sizeof(float));  // transmit & save the report
+  }else if(DOWN_FLAG == true){
+    bool report = radio.write(&down, sizeof(float));  // transmit & save the report
+  }
+
+  UP_FLAG = false;
+  DOWN_FLAG = false;
+
+  // if(UP_FLAG == true) digitalWrite(direction_pin, HIGH);
+  // if(DOWN_FLAG == true) digitalWrite(direction_pin, LOW);
+  // digitalWrite(enable_pin, LOW);
+  // // int i;
+
+  // for(i=0; i<num_steps_on_button; i++){
+    // digitalWrite(step_pin, HIGH);
+    // delay( 1.0/(float)step_frequency_hz*1000.0*0.1 );
+    // digitalWrite(step_pin, LOW);
+    // delay( 1.0/(float)step_frequency_hz*1000.0*0.1 );
+  // }
+
+  // digitalWrite(enable_pin, HIGH);
+}
+
 void loop() {
 
   if (role) {
@@ -105,6 +158,7 @@ void loop() {
 
     Serial.println("What number to send?");
     while (!Serial.available()) {
+      if( UP_FLAG == true || DOWN_FLAG == true) handle_button();
      // wait for user input
     }
     float input = Serial.parseFloat();
