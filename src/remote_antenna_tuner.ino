@@ -15,23 +15,17 @@
 #include "RF24.h"
 
 
-#define stepper
+//#define stepper
 //#define remote
 
-#ifdef stepper
-int role = false;
-#else
-int role = true;
-#endif
+#define IS_STEPPER  true
 
 // Stepper Setup
-#ifdef stepper
+#if IS_STEPPER
 const uint8_t enable_pin = 6;
 const uint8_t step_pin = 5;
 const uint8_t direction_pin = 4;
-#endif
-
-#ifdef remote
+#else
 const uint8_t mode_button_pin = 2;
 const uint8_t up_button_pin = 3;
 const uint8_t down_button_pin = 4;
@@ -53,29 +47,20 @@ uint8_t address[][6] = { "1Node", "2Node" };
 // uniquely identify which address this radio will use to transmit
 bool radioNumber = 1;  // 0 uses address[0] to transmit, 1 uses address[1] to transmit
 
-// Used to control whether this node is sending or receiving
-//bool role = false;  // true = TX role, false = RX role
-
-// For this example, we'll be using a payload containing
-// a single float number that will be incremented
-// on every successful transmission
 float payload = 0;
-//int payload = 0;
 
 void setup() {
 
   Serial.begin(115200);
 
-#ifdef stepper
+#if IS_STEPPER
   digitalWrite(enable_pin, HIGH); //Active low
   pinMode(enable_pin, OUTPUT);
   pinMode(step_pin, OUTPUT);
   pinMode(direction_pin, OUTPUT);
   radioNumber = 0;
   Serial.println("I am the Stepper Driver and I love my job!");
-#endif
-
-#ifdef remote
+#else
   pinMode(mode_button_pin, INPUT);
   pinMode(up_button_pin, INPUT);
   pinMode(down_button_pin, INPUT);
@@ -90,19 +75,6 @@ void setup() {
     Serial.println(F("radio hardware is not responding!!"));
     while (1) {}  // hold in infinite loop
   }
-
-  // // To set the radioNumber via the Serial monitor on startup
-  // Serial.println(F("Which radio is this? Enter '0' or '1'. Defaults to '0'"));
-  // while (!Serial.available()) {
-  //   // wait for user input
-  // }
-  // char input = Serial.parseInt();
-  // radioNumber = input == 1;
-  // Serial.print(F("radioNumber = "));
-  // Serial.println((int)radioNumber);
-
-  // role variable is hardcoded to RX behavior, inform the user of this
-  //Serial.println(F("*** PRESS 'T' to begin transmitting to the other node"));
 
   // Set the PA Level low to try preventing power supply related problems
   // because these examples are likely run with nodes in close proximity to
@@ -121,30 +93,15 @@ void setup() {
 
   // additional setup specific to the node's role
   //int role = true;
-  if (role) {
-    radio.stopListening();  // put radio in TX mode
-  } else {
+  #if IS_STEPPER
     radio.startListening();  // put radio in RX mode
-  }
-
-  // For debugging info
-  // printf_begin();             // needed only once for printing details
-  // radio.printDetails();       // (smaller) function that prints raw register values
-  // radio.printPrettyDetails(); // (larger) function that prints human readable data
+  #else
+    radio.stopListening();  // put radio in TX mode
+  #endif
 
 }  // setup
 
-// void ISR_UP(){
-//   UP_FLAG = true;
-//   return;
-// }
-
-// void ISR_MODE(){
-//   MODE_BUTTON_FLAG = true;
-//   return;
-// }
-
-#ifdef remote
+#if !IS_STEPPER
 void handle_button(){
 
   Serial.println("handling button");
@@ -179,37 +136,7 @@ void handle_button(){
 
 void loop() {
 
-#ifdef remote
-  //if (role) {
-    // This device is a TX node
-
-    Serial.println("What number to send?");
-    while (!Serial.available()) {
-      if( UP_FLAG == true || DOWN_FLAG == true) handle_button();
-     // wait for user input
-    }
-    float input = Serial.parseFloat();
-    Serial.print("Printing: ");
-    Serial.println(input);
-
-    unsigned long start_timer = micros();                // start the timer
-    bool report = radio.write(&input, sizeof(float));  // transmit & save the report
-    unsigned long end_timer = micros();                  // end the timer
-    
-    if (report) {
-      Serial.print(F("Transmission successful! "));  // payload was delivered
-      Serial.print(F("Time to transmit = "));
-      Serial.print(end_timer - start_timer);  // print the timer result
-      Serial.print(F(" us. Sent: "));
-      //Serial.println(input);  // print payload sent
-    }else{
-      Serial.println("Failure");
-    }
-
-#endif
-#ifdef stepper
-  //} else {
-    // This device is a RX node
+#if IS_STEPPER
 
     uint8_t pipe;
     if (radio.available(&pipe)) {              // is there a payload? get the pipe number that recieved it
@@ -251,27 +178,30 @@ void loop() {
     Serial.println("Stepper Disabled");
     }
     
-#endif
-  //}  // role
+#else
 
-  // if (Serial.available()) {
-  //   // change the role via the serial monitor
+    Serial.println("What number to send?");
+    while (!Serial.available()) {
+      if( UP_FLAG == true || DOWN_FLAG == true) handle_button();
+     // wait for user input
+    }
+    float input = Serial.parseFloat();
+    Serial.print("Printing: ");
+    Serial.println(input);
 
-  //   char c = toupper(Serial.read());
-  //   if (c == 'T' && !role) {
-  //     // Become the TX node
-
-  //     role = true;
-  //     Serial.println(F("*** CHANGING TO TRANSMIT ROLE -- PRESS 'R' TO SWITCH BACK"));
-  //     radio.stopListening();
-
-  //   } else if (c == 'R' && role) {
-  //     // Become the RX node
-
-  //     role = false;
-  //     Serial.println(F("*** CHANGING TO RECEIVE ROLE -- PRESS 'T' TO SWITCH BACK"));
-  //     radio.startListening();
-  //   }
-  // }
+    unsigned long start_timer = micros();                // start the timer
+    bool report = radio.write(&input, sizeof(float));  // transmit & save the report
+    unsigned long end_timer = micros();                  // end the timer
+    
+    if (report) {
+      Serial.print(F("Transmission successful! "));  // payload was delivered
+      Serial.print(F("Time to transmit = "));
+      Serial.print(end_timer - start_timer);  // print the timer result
+      Serial.print(F(" us. Sent: "));
+      //Serial.println(input);  // print payload sent
+    }else{
+      Serial.println("Failure");
+    }
+  #endif
 
 }  // loop
