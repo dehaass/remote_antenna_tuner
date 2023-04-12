@@ -14,18 +14,32 @@
 #include "printf.h"
 #include "RF24.h"
 
-// Stepper Setup
 
+#define stepper
+//#define remote
+
+#ifdef stepper
+int role = false;
+#else
+int role = true;
+#endif
+
+// Stepper Setup
+#ifdef stepper
 const uint8_t enable_pin = 6;
 const uint8_t step_pin = 5;
 const uint8_t direction_pin = 4;
+#endif
 
-const uint8_t up_button_pin = 2;
-const uint8_t down_button_pin = 3;
+#ifdef remote
+const uint8_t mode_button_pin = 2;
+const uint8_t up_button_pin = 3;
+const uint8_t down_button_pin = 4;
 bool UP_FLAG = false;
 bool DOWN_FLAG = false;
-const uint8_t num_steps_on_button = 50;
-const uint8_t step_frequency_hz = 100; //Hz
+//const uint8_t num_steps_on_button = 50;
+//const uint8_t step_frequency_hz = 100; //Hz
+#endif
 
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(7, 8);  // using pin 7 for the CE pin, and pin 8 for the CSN pin
@@ -40,7 +54,7 @@ uint8_t address[][6] = { "1Node", "2Node" };
 bool radioNumber = 1;  // 0 uses address[0] to transmit, 1 uses address[1] to transmit
 
 // Used to control whether this node is sending or receiving
-bool role = false;  // true = TX role, false = RX role
+//bool role = false;  // true = TX role, false = RX role
 
 // For this example, we'll be using a payload containing
 // a single float number that will be incremented
@@ -52,15 +66,24 @@ void setup() {
 
   Serial.begin(115200);
 
+#ifdef stepper
   digitalWrite(enable_pin, HIGH); //Active low
   pinMode(enable_pin, OUTPUT);
   pinMode(step_pin, OUTPUT);
   pinMode(direction_pin, OUTPUT);
+  radioNumber = 0;
+  Serial.println("I am the Stepper Driver and I love my job!");
+#endif
 
-  pinMode(up_button_pin, OUTPUT);
-  pinMode(down_button_pin, OUTPUT);
-  attachInterrupt( digitalPinToInterrupt(up_button_pin), ISR_UP, RISING);
-  attachInterrupt( digitalPinToInterrupt(down_button_pin), ISR_DOWN, RISING);
+#ifdef remote
+  pinMode(mode_button_pin, INPUT);
+  pinMode(up_button_pin, INPUT);
+  pinMode(down_button_pin, INPUT);
+  radioNumber = 1;
+  Serial.println("I am the remote and I work to live.");
+  //attachInterrupt( digitalPinToInterrupt(mode_button_pin), ISR_MODE, RISING);
+  //attachInterrupt( digitalPinToInterrupt(up_button_pin), ISR_UP, RISING);
+#endif
 
   // initialize the transceiver on the SPI bus
   if (!radio.begin()) {
@@ -68,18 +91,18 @@ void setup() {
     while (1) {}  // hold in infinite loop
   }
 
-  // To set the radioNumber via the Serial monitor on startup
-  Serial.println(F("Which radio is this? Enter '0' or '1'. Defaults to '0'"));
-  while (!Serial.available()) {
-    // wait for user input
-  }
-  char input = Serial.parseInt();
-  radioNumber = input == 1;
-  Serial.print(F("radioNumber = "));
-  Serial.println((int)radioNumber);
+  // // To set the radioNumber via the Serial monitor on startup
+  // Serial.println(F("Which radio is this? Enter '0' or '1'. Defaults to '0'"));
+  // while (!Serial.available()) {
+  //   // wait for user input
+  // }
+  // char input = Serial.parseInt();
+  // radioNumber = input == 1;
+  // Serial.print(F("radioNumber = "));
+  // Serial.println((int)radioNumber);
 
   // role variable is hardcoded to RX behavior, inform the user of this
-  Serial.println(F("*** PRESS 'T' to begin transmitting to the other node"));
+  //Serial.println(F("*** PRESS 'T' to begin transmitting to the other node"));
 
   // Set the PA Level low to try preventing power supply related problems
   // because these examples are likely run with nodes in close proximity to
@@ -97,6 +120,7 @@ void setup() {
   radio.openReadingPipe(1, address[!radioNumber]);  // using pipe 1
 
   // additional setup specific to the node's role
+  //int role = true;
   if (role) {
     radio.stopListening();  // put radio in TX mode
   } else {
@@ -110,16 +134,17 @@ void setup() {
 
 }  // setup
 
-void ISR_UP(){
-  UP_FLAG = true;
-  return;
-}
+// void ISR_UP(){
+//   UP_FLAG = true;
+//   return;
+// }
 
-void ISR_DOWN(){
-  DOWN_FLAG = true;
-  return;
-}
+// void ISR_MODE(){
+//   MODE_BUTTON_FLAG = true;
+//   return;
+// }
 
+#ifdef remote
 void handle_button(){
 
   Serial.println("handling button");
@@ -150,10 +175,12 @@ void handle_button(){
 
   // digitalWrite(enable_pin, HIGH);
 }
+#endif
 
 void loop() {
 
-  if (role) {
+#ifdef remote
+  //if (role) {
     // This device is a TX node
 
     Serial.println("What number to send?");
@@ -179,7 +206,9 @@ void loop() {
       Serial.println("Failure");
     }
 
-  } else {
+#endif
+#ifdef stepper
+  //} else {
     // This device is a RX node
 
     uint8_t pipe;
@@ -222,26 +251,27 @@ void loop() {
     Serial.println("Stepper Disabled");
     }
     
-  }  // role
+#endif
+  //}  // role
 
-  if (Serial.available()) {
-    // change the role via the serial monitor
+  // if (Serial.available()) {
+  //   // change the role via the serial monitor
 
-    char c = toupper(Serial.read());
-    if (c == 'T' && !role) {
-      // Become the TX node
+  //   char c = toupper(Serial.read());
+  //   if (c == 'T' && !role) {
+  //     // Become the TX node
 
-      role = true;
-      Serial.println(F("*** CHANGING TO TRANSMIT ROLE -- PRESS 'R' TO SWITCH BACK"));
-      radio.stopListening();
+  //     role = true;
+  //     Serial.println(F("*** CHANGING TO TRANSMIT ROLE -- PRESS 'R' TO SWITCH BACK"));
+  //     radio.stopListening();
 
-    } else if (c == 'R' && role) {
-      // Become the RX node
+  //   } else if (c == 'R' && role) {
+  //     // Become the RX node
 
-      role = false;
-      Serial.println(F("*** CHANGING TO RECEIVE ROLE -- PRESS 'T' TO SWITCH BACK"));
-      radio.startListening();
-    }
-  }
+  //     role = false;
+  //     Serial.println(F("*** CHANGING TO RECEIVE ROLE -- PRESS 'T' TO SWITCH BACK"));
+  //     radio.startListening();
+  //   }
+  // }
 
 }  // loop
