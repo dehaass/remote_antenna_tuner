@@ -1,22 +1,12 @@
-/*
- * See documentation at https://nRF24.github.io/RF24
- * See License information at root directory of this library
- * Author: Brendan Doherty (2bndy5)
+/* Remote Antenna Tuner
+ * For Stuart's dope Magloop tuner
+ * Created: 2023-04-11
  */
 
-/**
- * A simple example of sending data from 1 nRF24L01 transceiver to another.
- *
- * This example was written to be used on 2 devices acting as "nodes".
- * Use the Serial Monitor to change each node's behavior.
- */
 #include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
 
-
-//#define stepper
-//#define remote
 
 #define IS_STEPPER  true
 
@@ -101,8 +91,7 @@ void setup() {
 
 }  // setup
 
-#if !IS_STEPPER
-void handle_button(){
+void transmit_button(){
 
   Serial.println("handling button");
 
@@ -114,9 +103,6 @@ void handle_button(){
   }else if(DOWN_FLAG == true){
     bool report = radio.write(&down, sizeof(float));  // transmit & save the report
   }
-
-  UP_FLAG = false;
-  DOWN_FLAG = false;
 
   // if(UP_FLAG == true) digitalWrite(direction_pin, HIGH);
   // if(DOWN_FLAG == true) digitalWrite(direction_pin, LOW);
@@ -132,12 +118,8 @@ void handle_button(){
 
   // digitalWrite(enable_pin, HIGH);
 }
-#endif
 
-void loop() {
-
-#if IS_STEPPER
-
+void stepper_main(){
     uint8_t pipe;
     if (radio.available(&pipe)) {              // is there a payload? get the pipe number that recieved it
       uint8_t bytes = radio.getPayloadSize();  // get the size of the payload
@@ -178,13 +160,20 @@ void loop() {
     Serial.println("Stepper Disabled");
     }
     
-#else
+
+}
+
+void handle_buttons(){
+  return;
+
+}
+
+void remote_main(){
+
+  handle_buttons();
 
     Serial.println("What number to send?");
     while (!Serial.available()) {
-      if( UP_FLAG == true || DOWN_FLAG == true) handle_button();
-     // wait for user input
-    }
     float input = Serial.parseFloat();
     Serial.print("Printing: ");
     Serial.println(input);
@@ -202,6 +191,15 @@ void loop() {
     }else{
       Serial.println("Failure");
     }
-  #endif
+
+}
+
+void loop() {
+
+  if(IS_STEPPER){
+    stepper_main();
+  }else{
+    remote_main();
+  }
 
 }  // loop
