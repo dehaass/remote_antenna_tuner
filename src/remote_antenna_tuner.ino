@@ -12,7 +12,8 @@
 
 // Stepper Setup
 #if IS_STEPPER
-const uint8_t enable_pin = 6;
+const uint8_t enable_pin = 9;
+const uint8_t sleep_pin = 6;
 const uint8_t step_pin = 5;
 const uint8_t direction_pin = 4;
 #else
@@ -44,10 +45,12 @@ void setup() {
   Serial.begin(115200);
 
 #if IS_STEPPER
-  digitalWrite(enable_pin, HIGH); //Active low
   pinMode(enable_pin, OUTPUT);
+  pinMode(sleep_pin, OUTPUT);
   pinMode(step_pin, OUTPUT);
   pinMode(direction_pin, OUTPUT);
+  digitalWrite(enable_pin, HIGH); //Active low
+  digitalWrite(sleep_pin, HIGH); //Active low
   radioNumber = 0;
   Serial.println("I am the Stepper Driver and I love my job!");
 #else
@@ -91,6 +94,7 @@ void setup() {
 
 }  // setup
 
+/*
 void transmit_button(){
 
   Serial.println("handling button");
@@ -118,6 +122,7 @@ void transmit_button(){
 
   // digitalWrite(enable_pin, HIGH);
 }
+*/
 
 void stepper_main(){
     uint8_t pipe;
@@ -168,12 +173,13 @@ void handle_buttons(){
 
 }
 
+
 void remote_main(){
 
   handle_buttons();
 
     Serial.println("What number to send?");
-    while (!Serial.available()) {
+    while (!Serial.available());
     float input = Serial.parseFloat();
     Serial.print("Printing: ");
     Serial.println(input);
@@ -193,6 +199,7 @@ void remote_main(){
     }
 
 }
+
 
 void loop() {
 
