@@ -6,25 +6,39 @@
 #include <SPI.h>
 #include "printf.h"
 #include "RF24.h"
+//#include <millis.h>
 
 
-#define IS_STEPPER  true
+#define IS_STEPPER  false
 
 // Stepper Setup
-#if IS_STEPPER
-const uint8_t enable_pin = 9;
-const uint8_t sleep_pin = 6;
-const uint8_t step_pin = 5;
+const uint8_t enable_pin    = 9;
+const uint8_t sleep_pin     = 6;
+const uint8_t step_pin      = 5;
 const uint8_t direction_pin = 4;
-#else
+
+// Remote Setup
 const uint8_t mode_button_pin = 2;
-const uint8_t up_button_pin = 3;
-const uint8_t down_button_pin = 4;
+const uint8_t up_button_pin = 4;
+const uint8_t down_button_pin = 3;
+const uint8_t LED_ONE = A1;
+const uint8_t LED_TWO = A0;
 bool UP_FLAG = false;
 bool DOWN_FLAG = false;
-//const uint8_t num_steps_on_button = 50;
-//const uint8_t step_frequency_hz = 100; //Hz
-#endif
+
+const int SPEED_ZERO_STEPS  = 1;
+const int SPEED_ONE_STEPS   = 10;
+const int SPEED_TWO_STEPS   = 100;
+const int SPEED_THREE_STEPS = 500;
+
+unsigned long NEXT_BUTTON_CHECK = 0;
+unsigned long BUTTON_COOL_DOWN_MS = 200;
+
+uint8_t DEBOUNCE_DELAY_MS = 100;
+uint8_t UP_BUTTON_FLAG = false;
+uint8_t DOWN_BUTTON_FLAG = false;
+uint8_t MODE_BUTTON_FLAG = false;
+uint8_t SPEED_MODE = 1; // 0, 1, 2, or 3 indicate the number of steps per button press.
 
 // instantiate an object for the nRF24L01 transceiver
 RF24 radio(7, 8);  // using pin 7 for the CE pin, and pin 8 for the CSN pin
@@ -38,7 +52,7 @@ uint8_t address[][6] = { "1Node", "2Node" };
 // uniquely identify which address this radio will use to transmit
 bool radioNumber = 1;  // 0 uses address[0] to transmit, 1 uses address[1] to transmit
 
-float payload = 0;
+int payload = 0;
 
 void setup() {
 
@@ -57,6 +71,8 @@ void setup() {
   pinMode(mode_button_pin, INPUT);
   pinMode(up_button_pin, INPUT);
   pinMode(down_button_pin, INPUT);
+  pinMode(LED_ONE, OUTPUT);
+  pinMode(LED_TWO, OUTPUT);
   radioNumber = 1;
   Serial.println("I am the remote and I work to live.");
   //attachInterrupt( digitalPinToInterrupt(mode_button_pin), ISR_MODE, RISING);
@@ -169,23 +185,83 @@ void stepper_main(){
 }
 
 void handle_buttons(){
+  
+  if(digitalRead(up_button_pin) == HIGH){
+    if(UP_BUTTON_FLAG == false){
+      UP_BUTTON_FLAG = true;
+      NEXT_BUTTON_CHECK = millis() + DEBOUNCE_DELAY_MS;
+    }else if(millis() < NEXT_BUTTON_CHECK){
+      upButtonPressed();
+      UP_BUTTON_FLAG = false;
+      delay(BUTTON_COOL_DOWN_MS);
+    }
+  }
+
+  if(digitalRead(down_button_pin) == HIGH){
+    if(DOWN_BUTTON_FLAG == false){
+      DOWN_BUTTON_FLAG = true;
+      NEXT_BUTTON_CHECK = millis() + DEBOUNCE_DELAY_MS;
+    }else if(millis() < NEXT_BUTTON_CHECK){
+      downButtonPressed();
+      DOWN_BUTTON_FLAG = false;
+      delay(BUTTON_COOL_DOWN_MS);
+    }
+  }
+
+  if(digitalRead(mode_button_pin) == HIGH){
+    if(MODE_BUTTON_FLAG == false){
+      MODE_BUTTON_FLAG = true;
+      NEXT_BUTTON_CHECK = millis() + DEBOUNCE_DELAY_MS;
+    }else if(millis() < NEXT_BUTTON_CHECK){
+      modeButtonPressed();
+      MODE_BUTTON_FLAG = false;
+      delay(BUTTON_COOL_DOWN_MS);
+    }
+  }
+
   return;
+}
+
+void modeButtonPressed(){
+
+  Serial.println("Mode Button!");
+
+  SPEED_MODE++;
+  if(SPEED_MODE > 3) SPEED_MODE = 0;
+
+  digitalWrite(LED_ONE, LOW);
+  digitalWrite(LED_TWO, LOW);
+
+  if(SPEED_MODE == 1 || SPEED_MODE == 3) digitalWrite(LED_ONE, HIGH);
+  if(SPEED_MODE == 2 || SPEED_MODE == 3) digitalWrite(LED_TWO, HIGH);
 
 }
 
+void downButtonPressed(){
 
-void remote_main(){
+  if(SPEED_MODE == 0) sendSteps((-1)*SPEED_ZERO_STEPS);
+  if(SPEED_MODE == 1) sendSteps((-1)*SPEED_ONE_STEPS);
+  if(SPEED_MODE == 2) sendSteps((-1)*SPEED_TWO_STEPS);
+  if(SPEED_MODE == 3) sendSteps((-1)*SPEED_THREE_STEPS);
 
-  handle_buttons();
+}
 
-    Serial.println("What number to send?");
-    while (!Serial.available());
-    float input = Serial.parseFloat();
+void upButtonPressed(){
+
+  if(SPEED_MODE == 0) sendSteps(SPEED_ZERO_STEPS);
+  if(SPEED_MODE == 1) sendSteps(SPEED_ONE_STEPS);
+  if(SPEED_MODE == 2) sendSteps(SPEED_TWO_STEPS);
+  if(SPEED_MODE == 3) sendSteps(SPEED_THREE_STEPS);
+
+}
+
+bool sendSteps(int input){
+  
     Serial.print("Printing: ");
     Serial.println(input);
 
     unsigned long start_timer = micros();                // start the timer
-    bool report = radio.write(&input, sizeof(float));  // transmit & save the report
+    bool report = radio.write(&input, sizeof(int));  // transmit & save the report
     unsigned long end_timer = micros();                  // end the timer
     
     if (report) {
@@ -198,6 +274,39 @@ void remote_main(){
       Serial.println("Failure");
     }
 
+  return report;
+}
+
+
+void remote_main(){
+  while(1){
+
+    handle_buttons();
+
+      //Serial.println("What number to send?");
+      if (Serial.available()){
+        float input = Serial.parseFloat();
+        Serial.print("Printing: ");
+        Serial.println(input);
+
+        unsigned long start_timer = micros();                // start the timer
+        bool report = radio.write(&input, sizeof(float));  // transmit & save the report
+        unsigned long end_timer = micros();                  // end the timer
+        
+        if (report) {
+          Serial.print(F("Transmission successful! "));  // payload was delivered
+          Serial.print(F("Time to transmit = "));
+          Serial.print(end_timer - start_timer);  // print the timer result
+          Serial.print(F(" us. Sent: "));
+          //Serial.println(input);  // print payload sent
+        }else{
+          Serial.println("Failure");
+        }
+        Serial.println("What number to send?");
+      }
+
+  }
+
 }
 
 
@@ -206,6 +315,7 @@ void loop() {
   if(IS_STEPPER){
     stepper_main();
   }else{
+    Serial.println("What number to send?");
     remote_main();
   }
 
